@@ -504,9 +504,21 @@ class Aircraft:
         if self.state == AircraftState.DEPARTED or other.state == AircraftState.DEPARTED:
             return False
         
-        # Aircraft at gates don't collide with each other
-        if self.state == AircraftState.AT_GATE and other.state == AircraftState.AT_GATE:
+        # Aircraft at gates don't collide with each other (including boarding/deboarding)
+        gate_states = [AircraftState.AT_GATE, AircraftState.BOARDING_DEBOARDING]
+        if self.state in gate_states and other.state in gate_states:
             return False
+        
+        # Individual aircraft at gates are also protected from any collisions
+        if self.state in gate_states or other.state in gate_states:
+            # Only allow collision if both are mobile states
+            mobile_states = [
+                AircraftState.APPROACHING, AircraftState.LANDING, AircraftState.GO_AROUND,
+                AircraftState.TAXIING_TO_GATE, AircraftState.TAXIING_TO_RUNWAY, 
+                AircraftState.TAKING_OFF, AircraftState.HOLDING
+            ]
+            if self.state not in mobile_states or other.state not in mobile_states:
+                return False
         
         return self.distance_to(other) <= collision_distance
 

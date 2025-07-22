@@ -4,7 +4,8 @@ Graphics and visualization system using pygame.
 import pygame
 import math
 from typing import Dict, Tuple
-from models import AircraftState, RunwayState
+from models import AircraftState
+from models.airport import RunwayState
 from config import get_config
 
 # Color definitions

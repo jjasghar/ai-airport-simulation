@@ -121,10 +121,15 @@ class AirportSimulation:
         print("  - T: Assign takeoff")
         print("  - H: Hold pattern")
         
+        # Start the simulation engine
+        self.simulation_engine.start()
+        
         try:
             self.renderer.run()
         except Exception as e:
             print(f"Graphics error: {e}")
+            import traceback
+            traceback.print_exc()
         finally:
             self.simulation_engine.stop()
             # Log session end
