@@ -37,15 +37,19 @@ class OpenAI(BaseAI):
         timeout (float): API request timeout in seconds
     """
     
-    def __init__(self, api_key: str, model: str = "gpt-3.5-turbo"):
+    def __init__(self, api_key: str, model: str = "gpt-3.5-turbo", 
+                 base_url: str = None, local_server: bool = False):
         """
         Initialize the OpenAI AI implementation.
         
         Args:
             api_key (str): OpenAI API key for authentication
             model (str): Model name to use for decisions
+            base_url (str): Base URL for local OpenAI-compatible servers
+            local_server (bool): Whether this is a local server or official OpenAI API
         """
-        super().__init__(f"OpenAI-{model}")
+        server_type = "LocalOpenAI" if local_server else "OpenAI"
+        super().__init__(f"{server_type}-{model}")
         
         if not OPENAI_AVAILABLE:
             raise ImportError(
@@ -54,6 +58,8 @@ class OpenAI(BaseAI):
         
         self.api_key = api_key
         self.model = model
+        self.base_url = base_url
+        self.local_server = local_server
         self.client = None
         self.max_retries = 3
         self.timeout = 30.0
@@ -70,35 +76,71 @@ class OpenAI(BaseAI):
         """
         try:
             # Initialize OpenAI client
-            self.client = openai.OpenAI(
-                api_key=self.api_key,
-                timeout=self.timeout
-            )
+            client_kwargs = {
+                'api_key': self.api_key,
+                'timeout': self.timeout
+            }
+            
+            # Add base_url for local servers
+            if self.base_url:
+                # Ensure we append /v1 for OpenAI compatibility
+                base_url = self.base_url.rstrip('/')
+                if not base_url.endswith('/v1'):
+                    base_url = f"{base_url}/v1"
+                client_kwargs['base_url'] = base_url
+                self.logger.info(f"Connecting to local server at {base_url} with API key: {self.api_key}")
+            else:
+                self.logger.info("Connecting to official OpenAI API")
+                
+            self.client = openai.OpenAI(**client_kwargs)
             
             # Test connection with a simple API call
-            response = self.client.models.list()
-            
-            # Verify the selected model is available
-            available_models = [model.id for model in response.data]
-            if self.model not in available_models:
-                self.logger.warning(f"Model {self.model} not found in available models")
-                # Try to find a suitable fallback
-                fallback_models = ['gpt-3.5-turbo', 'gpt-4', 'gpt-4-turbo']
-                for fallback in fallback_models:
-                    if fallback in available_models:
-                        self.logger.info(f"Using fallback model: {fallback}")
-                        self.model = fallback
-                        break
-                else:
-                    self.logger.error("No suitable model found")
+            if self.local_server:
+                # For local servers, try a simple chat completion instead of model listing
+                try:
+                    test_response = self.client.chat.completions.create(
+                        model=self.model,
+                        messages=[{"role": "user", "content": "Test connection"}],
+                        max_tokens=10,
+                        timeout=5
+                    )
+                    
+                    if test_response and test_response.choices:
+                        self.logger.info(f"Local OpenAI server connected at {self.base_url}")
+                    else:
+                        self.logger.error("Test completion failed - no response")
+                        return False
+                        
+                except Exception as test_error:
+                    self.logger.error(f"Local server test failed: {test_error}")
                     return False
+            else:
+                # For official OpenAI API, check model availability
+                response = self.client.models.list()
+                
+                # Verify the selected model is available
+                available_models = [model.id for model in response.data]
+                if self.model not in available_models:
+                    self.logger.warning(f"Model {self.model} not found in available models")
+                    # Try to find a suitable fallback
+                    fallback_models = ['gpt-3.5-turbo', 'gpt-4', 'gpt-4-turbo']
+                    for fallback in fallback_models:
+                        if fallback in available_models:
+                            self.logger.info(f"Using fallback model: {fallback}")
+                            self.model = fallback
+                            break
+                    else:
+                        self.logger.error("No suitable model found")
+                        return False
             
             self.is_connected = True
-            self.logger.info(f"OpenAI connected successfully using model: {self.model}")
+            server_info = f"local server at {self.base_url}" if self.local_server else "OpenAI API"
+            self.logger.info(f"Connected to {server_info} using model: {self.model}")
             return True
             
         except Exception as e:
-            self.logger.error(f"Failed to connect to OpenAI: {e}")
+            server_info = f"local OpenAI server at {self.base_url}" if self.local_server else "OpenAI API"
+            self.logger.error(f"Failed to connect to {server_info}: {e}")
             self.is_connected = False
             return False
     
@@ -122,6 +164,8 @@ class OpenAI(BaseAI):
             AIResponse: AI decision and reasoning
         """
         start_time = time.time()
+        
+
         
         if not self.is_connected:
             return self._create_response(
@@ -208,12 +252,15 @@ DECISION PRIORITY ORDER:
 5. Normal traffic flow and efficiency
 6. Airport capacity optimization
 
-Respond with a JSON object containing:
+CRITICAL: You MUST respond with ONLY a valid JSON object in this exact format:
 {
-  "decision": "land|gate|takeoff|hold|wait|assign_runway|avoid",
-  "target": runway_or_gate_id_or_avoidance_position_if_applicable,
-  "reasoning": "brief explanation emphasizing SAFETY considerations"
-}"""
+  "decision": "land",
+  "target": 0,
+  "reasoning": "brief explanation"
+}
+
+Valid decisions: land, gate, takeoff, hold, wait, assign_runway, avoid
+Do not include any other text or numbers outside the JSON object."""
     
     def _format_situation_context(self, aircraft: Dict[str, Any], 
                                  airport: Dict[str, Any]) -> str:
@@ -227,32 +274,81 @@ Respond with a JSON object containing:
         Returns:
             str: Formatted situation context
         """
-        # Format aircraft info
-        aircraft_context = f"""Aircraft: {aircraft['callsign']} [{aircraft['aircraft_type']}]
-State: {aircraft['state']}
-Position: ({aircraft['position'].get('x', 0)}, {aircraft['position'].get('y', 0)})
-Fuel: {aircraft['fuel']:.1f}%
-Assigned Runway: {aircraft['assigned_runway']}
-Assigned Gate: {aircraft['assigned_gate']}
-Low Fuel: {aircraft['is_low_fuel']}
-Critical Fuel: {aircraft['is_critical_fuel']}"""
+        # Format aircraft info with robust error handling
+        try:
+            if hasattr(aircraft, 'callsign'):
+                # Aircraft object format
+                pos_x = getattr(aircraft.position, 'x', 0) if hasattr(aircraft, 'position') else 0
+                pos_y = getattr(aircraft.position, 'y', 0) if hasattr(aircraft, 'position') else 0
+                aircraft_context = f"""Aircraft: {aircraft.callsign} [{aircraft.aircraft_type}]
+State: {aircraft.state}
+Position: ({pos_x}, {pos_y})
+Fuel: {aircraft.fuel:.1f}%
+Assigned Runway: {getattr(aircraft, 'assigned_runway', None)}
+Assigned Gate: {getattr(aircraft, 'assigned_gate', None)}
+Low Fuel: {aircraft.fuel < 25.0}
+Critical Fuel: {aircraft.fuel < 15.0}"""
+            else:
+                # Dictionary format - handle position safely
+                position = aircraft.get('position', {})
+                if isinstance(position, dict):
+                    pos_x = position.get('x', 0)
+                    pos_y = position.get('y', 0)
+                else:
+                    # Position might be an object or other format
+                    pos_x = getattr(position, 'x', 0) if hasattr(position, 'x') else 0
+                    pos_y = getattr(position, 'y', 0) if hasattr(position, 'y') else 0
+                
+                # Handle aircraft_type which might be an enum
+                aircraft_type = aircraft.get('aircraft_type', 'Unknown')
+                if hasattr(aircraft_type, 'value'):
+                    aircraft_type = aircraft_type.value
+                
+                aircraft_context = f"""Aircraft: {aircraft.get('callsign', 'Unknown')} [{aircraft_type}]
+State: {aircraft.get('state', 'Unknown')}
+Position: ({pos_x}, {pos_y})
+Fuel: {aircraft.get('fuel', 0):.1f}%
+Assigned Runway: {aircraft.get('assigned_runway', None)}
+Assigned Gate: {aircraft.get('assigned_gate', None)}
+Low Fuel: {aircraft.get('is_low_fuel', False)}
+Critical Fuel: {aircraft.get('is_critical_fuel', False)}"""
+        except Exception as e:
+            # Fallback to basic info if formatting fails
+            aircraft_context = f"Aircraft: Error formatting aircraft data - {str(e)}"
         
-        # Format airport info
-        runway_info = []
-        for i, runway in enumerate(airport['runways']):
-            status = "occupied" if runway.get('occupied_by') else "available"
-            runway_info.append(f"Runway {i}: {status}")
-        
-        gate_info = []
-        for i, gate in enumerate(airport['gates']):
-            status = "occupied" if gate.get('occupied_by') else "available"
-            gate_info.append(f"Gate {i}: {status}")
-        
-        airport_context = f"""Airport Status:
-Runways: {', '.join(runway_info)}
-Gates: {', '.join(gate_info)}
-Total Aircraft: {len(airport['aircraft'])}
-Total Crashes: {airport['total_crashes']}"""
+        # Format airport info with error handling
+        try:
+            runway_info = []
+            runways = airport.get('runways', [])
+            for i, runway in enumerate(runways):
+                if isinstance(runway, dict):
+                    status = "occupied" if runway.get('occupied_by') else "available"
+                else:
+                    # Handle runway object format
+                    status = "occupied" if getattr(runway, 'occupied_by', None) else "available"
+                runway_info.append(f"Runway {i}: {status}")
+            
+            gate_info = []
+            gates = airport.get('gates', [])
+            for i, gate in enumerate(gates):
+                if isinstance(gate, dict):
+                    status = "occupied" if gate.get('occupied_by') else "available"
+                else:
+                    # Handle gate object format
+                    status = "occupied" if getattr(gate, 'occupied_by', None) else "available"
+                gate_info.append(f"Gate {i}: {status}")
+            
+            aircraft_count = len(airport.get('aircraft', []))
+            total_crashes = airport.get('total_crashes', 0)
+            
+            airport_context = f"""Airport Status:
+Runways: {', '.join(runway_info) if runway_info else 'No runway info'}
+Gates: {', '.join(gate_info) if gate_info else 'No gate info'}
+Total Aircraft: {aircraft_count}
+Total Crashes: {total_crashes}"""
+        except Exception as e:
+            # Fallback to basic info if formatting fails
+            airport_context = f"Airport Status: Error formatting airport data - {str(e)}"
         
         return f"{aircraft_context}\n\n{airport_context}"
     
@@ -309,6 +405,14 @@ Total Crashes: {airport['total_crashes']}"""
             # Try to parse as JSON
             response_data = json.loads(response)
             
+            # Ensure response_data is a dictionary
+            if not isinstance(response_data, dict):
+                # Silently handle non-dict responses with minimal logging
+                response_type = type(response_data).__name__
+                self.logger.debug(f"Model returned {response_type} instead of JSON, using fallback")
+                # If it's not a dict, treat as a simple text response
+                response_data = {'decision': 'wait', 'reasoning': 'Model returned non-JSON response, using safe default'}
+            
             decision = response_data.get('decision', 'wait')
             target = response_data.get('target')
             reasoning = response_data.get('reasoning', 'No reasoning provided')
@@ -326,31 +430,40 @@ Total Crashes: {airport['total_crashes']}"""
             
         except json.JSONDecodeError:
             # If JSON parsing fails, try to extract decision from text
-            self.logger.warning(f"Failed to parse JSON response: {response}")
+            self.logger.debug(f"Model response not valid JSON, using text parsing fallback")
             
             # Simple text-based parsing as fallback
             decision = 'wait'
             target = None
-            reasoning = "Failed to parse response"
+            reasoning = "Model response not in JSON format - using safe default"
             
-            # Look for key decision words
-            response_lower = response.lower()
-            if 'land' in response_lower:
-                decision = 'land'
-            elif 'takeoff' in response_lower:
+            # Look for key decision words in the response
+            response_str = str(response).lower()
+            if 'land' in response_str:
+                decision = 'assign_runway'
+                target = '0'
+                reasoning = "Detected landing intent from non-JSON response"
+            elif 'takeoff' in response_str:
                 decision = 'takeoff'
-            elif 'gate' in response_lower:
+                target = '0'
+                reasoning = "Detected takeoff intent from non-JSON response"
+            elif 'gate' in response_str:
                 decision = 'gate'
-            elif 'hold' in response_lower:
+                target = '0'
+                reasoning = "Detected gate assignment intent from non-JSON response"
+            elif 'hold' in response_str:
                 decision = 'hold'
-            elif 'avoid' in response_lower:
+                reasoning = "Detected hold intent from non-JSON response"
+            elif 'avoid' in response_str:
                 decision = 'avoid'
+                target = '0'
+                reasoning = "Detected avoidance intent from non-JSON response"
             
             return self._create_response(
                 decision=decision,
                 target=target,
-                reasoning=f"Fallback parsing: {response[:100]}...",
-                confidence=0.3  # Lower confidence for fallback parsing
+                reasoning=reasoning,
+                confidence=0.2  # Lower confidence for fallback parsing
             )
     
     def get_status(self) -> Dict[str, Any]:

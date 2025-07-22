@@ -30,7 +30,11 @@ class Config:
             'openai': type('obj', (object,), {
                 'enabled': False,
                 'api_key': '',
-                'model': 'gpt-3.5-turbo'
+                'model': 'gpt-3.5-turbo',
+                'base_url': None,
+                'local_server': False,
+                'timeout': 30.0,
+                'max_retries': 3
             })()
         })()
         
@@ -87,6 +91,10 @@ class ConfigManager:
                     config.ai.openai.enabled = openai_data.get('enabled', False)
                     config.ai.openai.api_key = openai_data.get('api_key', '')
                     config.ai.openai.model = openai_data.get('model', 'gpt-3.5-turbo')
+                    config.ai.openai.base_url = openai_data.get('base_url', None)
+                    config.ai.openai.local_server = openai_data.get('local_server', False)
+                    config.ai.openai.timeout = openai_data.get('timeout', 30.0)
+                    config.ai.openai.max_retries = openai_data.get('max_retries', 3)
             
             # Load prompts
             if 'prompts' in yaml_data:

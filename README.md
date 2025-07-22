@@ -83,17 +83,25 @@ pip install -r requirements.txt
 
 ### Basic Usage
 ```bash
-# Run with graphics (default: Ollama AI)
+# Run with graphics (default: Ollama AI, simulation stopped)
 python main.py
+
+# Run with graphics and auto-start simulation
+python main.py --auto-start
 
 # Compare different AI systems
 python main.py --ai rule_based    # Baseline performance
 python main.py --ai ollama        # Local LLM testing  
 python main.py --ai openai        # Commercial LLM (requires API key)
 
+# Auto-start with specific AI
+python main.py --ai ollama --auto-start
+
 # Headless performance testing
 python main.py --headless --duration 300  # 5-minute test run
 ```
+
+> **🆕 Recent Update**: Graphics mode now starts **stopped by default** for better user control. Use `--auto-start` to begin simulation immediately. AI switching buttons were removed from the UI - use the `--ai` command line flag instead.
 
 ### Ollama Setup (Recommended for LLM Testing)
 ```bash
@@ -172,10 +180,13 @@ ai:
 ## 🎮 Controls & Interface
 
 ### Graphics Mode Controls
-- **🚦 Start/Pause**: Control simulation state
-- **🤖 AI Switch**: Toggle between Rule-Based and Ollama AI
+- **🚦 Start/Stop**: Control simulation state (simulation starts stopped by default)
 - **👨‍✈️ Manual Mode**: Take direct control of aircraft
+- **✈️ Add Aircraft**: Add test aircraft for testing
+- **🔄 Reset Sim**: Reset the simulation
 - **📊 Status Panels**: Real-time aircraft, runway, and system status
+
+**Note**: AI selection is now done via command line (`--ai` flag). Use `--auto-start` to begin simulation immediately in graphics mode.
 
 ### Manual Control (when enabled)
 - **Click aircraft** to select
@@ -267,6 +278,38 @@ class BaseAI:
         # LLM receives full context
         # Returns structured decision with reasoning
         pass
+```
+
+## 🖥️ Command Line Options
+
+### Core Options
+```bash
+# Basic simulation modes
+python main.py                          # Graphics mode, stopped by default
+python main.py --auto-start             # Graphics mode, auto-start simulation
+python main.py --headless               # Headless mode, no graphics
+python main.py --headless --duration 60 # Headless for 60 seconds (headless only)
+
+# AI selection (choose before starting)
+python main.py --ai rule_based          # Use rule-based AI
+python main.py --ai ollama              # Use Ollama (local LLM)
+python main.py --ai openai              # Use OpenAI (API/local server)
+python main.py --ai remote              # Use remote AI endpoint (legacy)
+
+# Configuration
+python main.py --config                 # Create default config file
+python main.py --runways 3              # Override runway count
+python main.py --gates 6                # Override gate count
+python main.py --ollama-model llama3.1  # Override Ollama model
+
+# Combined examples
+python main.py --ai ollama --auto-start             # Auto-start with Ollama
+python main.py --ai openai --auto-start --gates 8   # OpenAI with custom gates
+```
+
+### Help & Usage
+```bash
+python main.py --help    # Show all available options
 ```
 
 ## 🤝 Contributing
