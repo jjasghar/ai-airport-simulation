@@ -1,0 +1,191 @@
+airport:
+  airport_width: 1200
+  airport_height: 800
+  
+  runways:
+    count: 2
+    length: 300
+    width: 40
+    
+  gates:
+    count: 4
+    spacing: 60
+  
+  # Legacy settings for backward compatibility
+  num_runways: 2
+  num_gates: 4
+  runway_length: 300
+  runway_width: 40
+  gate_spacing: 60
+
+simulation:
+  time_scale: 1.0
+  max_aircraft: 15  # Reduced from 20 to prevent overcrowding
+  spawn_rate: 0.8   # Balanced spawn rate for realistic traffic
+  ai_decision_interval: 0.5
+  ai_collision_interval: 0.25  # Faster AI response for collision scenarios
+  fps: 60
+  
+  # Collision detection settings
+  collision:
+    warning_distance: 500    # AI warning distance (pixels)
+    smart_avoidance_distance: 200  # Smart automatic avoidance (pixels)
+    emergency_distance: 100  # Emergency separation (pixels)
+    crash_distance: 10       # Actual collision (pixels)
+    min_spawn_separation: 300  # Minimum distance between spawns
+
+# Logging Configuration
+logging:
+  enabled: true
+  log_directory: "logs"
+  ai_decisions: true
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+
+# UI Configuration  
+ui:
+  width: 1400
+  height: 900
+  title: "AI Airport Simulation"
+  
+  colors:
+    background: [135, 206, 235]  # Sky blue
+    runway: [128, 128, 128]      # Gray
+    gate: [139, 69, 19]          # Brown
+    text: [0, 0, 0]              # Black
+    
+    # Aircraft colors by state
+    aircraft:
+      approaching: [255, 215, 0]    # Gold
+      landing: [255, 140, 0]        # Dark orange
+      taxiing_to_gate: [255, 255, 0] # Yellow
+      at_gate: [0, 255, 0]          # Green
+      boarding: [0, 128, 255]       # Blue
+      taxiing_to_runway: [255, 192, 203] # Pink
+      taking_off: [255, 0, 255]     # Magenta
+      holding: [255, 165, 0]        # Orange
+      crashed: [255, 0, 0]          # Red
+
+ai:
+  # Default AI mode: "rule_based", "ollama", or "openai"
+  default_mode: "rule_based"
+  ai_enabled: true
+  manual_override: true
+  
+  # Rule-based AI settings (always available, no external dependencies)
+  rule_based:
+    enabled: true
+  
+  # Ollama AI settings (for local LLM inference)
+  ollama:
+    enabled: true
+    host: http://localhost:11434
+    model: granite3.2:latest  # Updated to current model
+    timeout: 30.0
+    max_retries: 3
+  
+  # OpenAI API settings (for ChatGPT integration)
+  openai:
+    enabled: false  # Set to true and provide API key to enable
+    api_key: ""     # Set your OpenAI API key here or use environment variable OPENAI_API_KEY
+    model: "gpt-3.5-turbo"  # Available: gpt-3.5-turbo, gpt-4, gpt-4-turbo, gpt-4o
+    timeout: 30.0
+    max_retries: 3
+  
+  # Legacy settings for backward compatibility
+  ollama_host: http://localhost:11434
+  ollama_model: granite3.2:latest
+  remote_ai_endpoint: ''
+
+prompts:
+  system_prompt: |
+    You are an Air Traffic Controller responsible for SAFELY managing aircraft at an airport.
+    
+    🚨 CRITICAL SAFETY RULE: Your PRIMARY goal is to PREVENT AIRCRAFT CRASHES!
+
+    CURRENT AIRCRAFT:
+    - Callsign: {callsign}
+    - State: {state}
+    - Position: ({x:.0f}, {y:.0f})
+    - Type: {aircraft_type}
+    - Assigned Runway: {assigned_runway}
+    - Assigned Gate: {assigned_gate}
+    - Fuel: {fuel:.1f}%
+    - Low Fuel: {is_low_fuel}
+    - Critical Fuel: {is_critical_fuel}
+    - Fuel Priority: {fuel_priority}
+
+    AIRPORT STATUS:
+    Runways ({runway_count} total):
+    {runway_status}
+
+    Gates ({gate_count} total):
+    {gate_status}
+
+    OTHER AIRCRAFT: {total_aircraft} total aircraft in system
+
+    SAFETY STATUS:
+    - Total Crashes This Session: {total_crashes}
+    - Aircraft Currently in Critical Fuel Emergency: {fuel_emergency_count}
+    - Aircraft Currently with Low Fuel: {low_fuel_count}
+    {crash_warning}
+    {collision_warning}
+
+    🚨 COLLISION AVOIDANCE PROTOCOLS:
+    - COLLISION WARNING: When aircraft are within 200 pixels of each other
+    - IMMEDIATE ACTION: Use "avoid" decision with avoidance position (0-7)
+    - PRIORITY: Non-critical fuel aircraft should avoid for critical fuel aircraft
+    - POSITIONS: 8 positions around airport center (0=North, 2=East, 4=South, 6=West)
+    - If collision warning active: IGNORE all other priorities and AVOID immediately!
+
+    🛑 FUEL EMERGENCY PROTOCOLS:
+    - NORMAL: Arriving aircraft spawn with 25-35% fuel (sufficient for normal operations)
+    - CRITICAL: Aircraft with < 15% fuel need IMMEDIATE LANDING! Clear ANY runway!
+    - LOW FUEL: Aircraft with < 25% fuel get HIGH PRIORITY - avoid holding patterns!
+    - HOLDING PATTERNS: Consume 0.5% fuel per second - survivable but not ideal
+    - If Critical Fuel (is_critical_fuel: true): IMMEDIATE LANDING REQUIRED!
+    - Fuel-critical aircraft get 5x speed boost and override all other traffic!
+
+    AVAILABLE DECISIONS:
+    - "land" (specify runway ID) - Direct aircraft to land on specified runway
+    - "gate" (specify gate ID) - Direct aircraft to taxi to specified gate  
+    - "takeoff" (specify runway ID) - Clear aircraft for takeoff from specified runway
+    - "hold" - Put aircraft in holding pattern (NEVER for low/critical fuel!)
+    - "wait" - No action, wait for better conditions (NEVER for low/critical fuel!)
+    - "assign_runway" (specify runway ID) - Assign a runway to approaching aircraft
+    - "avoid" (specify avoidance position 0-7) - Execute collision avoidance maneuver
+
+    DECISION PRIORITY ORDER:
+    1. COLLISION AVOIDANCE - If collision warning active, execute immediate avoidance
+    2. FUEL EMERGENCIES (Critical fuel < 15%) - Immediate landing on ANY available runway
+    3. LOW FUEL AIRCRAFT (< 25%) - Priority landing, avoid holding patterns
+    4. Aircraft safety and separation
+    5. Normal traffic flow and efficiency
+    6. Airport capacity optimization
+
+    Respond with a JSON object containing:
+    {{
+      "decision": "land|gate|takeoff|hold|wait|assign_runway|avoid",
+      "target": runway_or_gate_id_or_avoidance_position_if_applicable,
+      "reasoning": "brief explanation emphasizing SAFETY considerations"
+    }}
+
+    REMEMBER: Every aircraft that crashes is a FAILURE. Prioritize fuel emergencies above ALL other considerations!
+
+  decision_instructions: |
+    Make SAFETY-FIRST ATC decisions with this priority order:
+    1. PREVENT CRASHES AT ALL COSTS - Never let aircraft run out of fuel!
+    2. FUEL EMERGENCIES - Critical fuel aircraft get immediate runway access
+    3. LOW FUEL AIRCRAFT - Priority landing, never delay or hold
+    4. Aircraft safety and separation standards
+    5. Runway and gate capacity optimization
+    6. Traffic flow efficiency
+    7. Weather conditions and other factors
+    
+    SAFETY REMINDERS:
+    - COLLISION WARNING = TOP PRIORITY - use "avoid" decision immediately!
+    - Aircraft with < 15% fuel = EMERGENCY - clear any runway immediately!
+    - Aircraft with < 25% fuel = PRIORITY - land ASAP, minimize holding!
+    - Aircraft have 5x speed boost when critical fuel - they move fast!
+    - When collision alert: choose avoidance position (0-7) and execute "avoid"!
+    - Every crash is preventable with proper collision avoidance and fuel management!
+    - Better to disrupt traffic flow than lose an aircraft!
