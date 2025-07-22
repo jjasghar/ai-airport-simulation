@@ -349,7 +349,7 @@ class OllamaAI(BaseAI):
                         "top_p": 0.9
                     }
                 },
-                timeout=10
+                timeout=20
             )
             
             if response.status_code == 200:
