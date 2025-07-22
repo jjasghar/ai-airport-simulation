@@ -106,7 +106,7 @@ class AirportSimulation:
             print("Simulation stopped")
             print(f"AI decision log saved to: {get_log_file_path()}")
     
-    def run_with_graphics(self):
+    def run_with_graphics(self, auto_start=False):
         """Run simulation with graphics."""
         if not self.renderer:
             self.setup_graphics()
@@ -121,8 +121,12 @@ class AirportSimulation:
         print("  - T: Assign takeoff")
         print("  - H: Hold pattern")
         
-        # Start the simulation engine
-        self.simulation_engine.start()
+        if auto_start:
+            print("Auto-starting simulation...")
+            # Start the simulation engine
+            self.simulation_engine.start()
+        else:
+            print("Simulation stopped - use 'Start / Stop' button to begin")
         
         try:
             self.renderer.run()
@@ -138,11 +142,11 @@ class AirportSimulation:
             print(f"AI decision log saved to: {get_log_file_path()}")
     
     def run(self):
-        """Run the simulation."""
+        """Run the simulation (default: graphics mode, stopped)."""
         if self.headless:
             self.run_headless()
         else:
-            self.run_with_graphics()
+            self.run_with_graphics(auto_start=False)
     
     def get_stats(self):
         """Get simulation statistics."""
@@ -207,8 +211,13 @@ Configuration:
     
     parser.add_argument(
         '--ai',
-        choices=['rule_based', 'ollama', 'remote'],
+        choices=['rule_based', 'ollama', 'openai', 'remote'],
         help='Choose AI implementation to use'
+    )
+    parser.add_argument(
+        '--auto-start',
+        action='store_true',
+        help='Auto-start the simulation in graphics mode (default: stopped)'
     )
     
     parser.add_argument(
@@ -265,11 +274,11 @@ Configuration:
         if args.ai:
             simulation.switch_ai(args.ai)
         
-        # Run headless with duration if specified
-        if args.headless and args.duration:
+        # Run simulation based on mode
+        if args.headless:
             simulation.run_headless(args.duration)
         else:
-            simulation.run()
+            simulation.run_with_graphics(auto_start=args.auto_start)
         
         # Print final stats
         if args.headless:

@@ -478,6 +478,37 @@ class AIManager:
                 print(f"Failed to initialize Ollama AI: {e}")
                 AI_LOGGER.warning(f"Failed to initialize Ollama AI: {e}")
         
+        # Initialize OpenAI if configured
+        openai_enabled = getattr(config.ai, 'openai', None) and getattr(config.ai.openai, 'enabled', False) if hasattr(config, 'ai') else False
+        if openai_enabled:
+            try:
+                # Import here to avoid circular imports
+                from ai.openai_ai import OpenAI
+                
+                openai_config = config.ai.openai
+                api_key = getattr(openai_config, 'api_key', 'local')
+                model = getattr(openai_config, 'model', 'gpt-3.5-turbo')
+                base_url = getattr(openai_config, 'base_url', None)
+                local_server = getattr(openai_config, 'local_server', False)
+                
+                openai_ai = OpenAI(
+                    api_key=api_key,
+                    model=model,
+                    base_url=base_url,
+                    local_server=local_server
+                )
+                
+                # Try to connect
+                if openai_ai.connect():
+                    self.available_ais['openai'] = openai_ai
+                    AI_LOGGER.info("OpenAI AI initialized successfully")
+                else:
+                    AI_LOGGER.warning("OpenAI AI failed to connect")
+                    
+            except Exception as e:
+                print(f"Failed to initialize OpenAI AI: {e}")
+                AI_LOGGER.warning(f"Failed to initialize OpenAI AI: {e}")
+        
         # Initialize remote AI if configured (legacy support)
         remote_endpoint = getattr(config.ai, 'remote_ai_endpoint', None) if hasattr(config, 'ai') else None
         if remote_endpoint:
@@ -558,10 +589,29 @@ class AIManager:
         }
         
         # Get AI decision
-        ai_response = self.current_ai.make_decision(situation)
+        try:
+            # Check if this is the new modular AI interface (OpenAI) or old interface
+            if hasattr(self.current_ai, 'local_server') or 'OpenAI' in self.current_ai.name:
+                # New modular interface expects (aircraft, airport_state, config)
+                from config import get_config
+                config = get_config()
+                # Pass the aircraft dict directly - it's already properly formatted
+                ai_response = self.current_ai.make_decision(
+                    aircraft=situation['aircraft'],
+                    airport_state=situation,
+                    config=config
+                )
+            else:
+                # Old interface expects just the situation dict
+                ai_response = self.current_ai.make_decision(situation)
+        except Exception as e:
+            # Fallback error handling
+            print(f"AI decision error: {e}")
+            ai_response = AIResponse(decision='wait', reasoning=f'AI error: {str(e)}')
         
-        # Log decision
-        self.current_ai.log_decision(situation, ai_response)
+        # Log decision (if method exists)
+        if hasattr(self.current_ai, 'log_decision'):
+            self.current_ai.log_decision(situation, ai_response)
         
         # Convert to simulation format
         decision = {

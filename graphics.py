@@ -101,13 +101,9 @@ class AirportRenderer:
             Button(ui_x, 70, button_width, button_height, "Start / Stop", self.toggle_simulation),
             Button(ui_x + button_spacing_x, 70, button_width, button_height, "Manual Mode", self.toggle_manual_mode),
             
-            # Second row - AI Selection  
-            Button(ui_x, 70 + button_spacing_y, button_width, button_height, "Rule Based", self.switch_to_rule_based),
-            Button(ui_x + button_spacing_x, 70 + button_spacing_y, button_width, button_height, "Ollama AI", self.switch_to_ollama),
-            
-            # Third row - Other controls
-            Button(ui_x, 70 + button_spacing_y * 2, button_width, button_height, "Add Aircraft", self.add_test_aircraft),
-            Button(ui_x + button_spacing_x, 70 + button_spacing_y * 2, button_width, button_height, "Reset Sim", self.reset_simulation),
+            # Second row - Simulation controls
+            Button(ui_x, 70 + button_spacing_y, button_width, button_height, "Add Aircraft", self.add_test_aircraft),
+            Button(ui_x + button_spacing_x, 70 + button_spacing_y, button_width, button_height, "Reset Sim", self.reset_simulation),
         ]
     
     def toggle_simulation(self):
@@ -121,28 +117,8 @@ class AirportRenderer:
         """Toggle manual control mode."""
         self.simulation.manual_mode = not self.simulation.manual_mode
     
-    def switch_to_rule_based(self):
-        """Switch to rule-based AI."""
-        # Access AI manager through the main application
-        if hasattr(self.simulation, 'atc') and hasattr(self.simulation.atc, 'ai_manager'):
-            self.simulation.atc.ai_manager.switch_ai('rule_based')
-        elif hasattr(self.simulation, 'ai_manager') and self.simulation.ai_manager:
-            self.simulation.ai_manager.switch_ai('rule_based')
-        else:
-            print("AI manager not available")
-    
-    def switch_to_ollama(self):
-        """Switch to ollama AI with default model."""
-        # Access AI manager through the main application
-        if hasattr(self.simulation, 'atc') and hasattr(self.simulation.atc, 'ai_manager'):
-            self.simulation.atc.ai_manager.switch_ai('ollama')
-        elif hasattr(self.simulation, 'ai_manager') and self.simulation.ai_manager:
-            self.simulation.ai_manager.switch_ai('ollama')
-        else:
-            print("AI manager not available")
-    
 
-
+    
     def add_test_aircraft(self):
         """Add a test aircraft for testing."""
         from models import Aircraft, Position, AircraftState

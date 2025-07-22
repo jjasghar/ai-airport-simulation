@@ -83,13 +83,15 @@ ai:
     timeout: 30.0
     max_retries: 3
   
-  # OpenAI API settings (for ChatGPT integration)
+  # OpenAI API settings (for ChatGPT integration or local OpenAI-compatible servers)
   openai:
-    enabled: false  # Set to true and provide API key to enable
-    api_key: ""     # Set your OpenAI API key here or use environment variable OPENAI_API_KEY
-    model: "gpt-3.5-turbo"  # Available: gpt-3.5-turbo, gpt-4, gpt-4-turbo, gpt-4o
+    enabled: true   # Set to true to enable OpenAI-compatible API
+    api_key: "local"  # For local servers, can be any string. For real OpenAI, set your API key
+    model: "~/llama.cpp/ggml-org_gemma-3-1b-it-GGUF_gemma-3-1b-it-Q4_K_M.gguf"  # Model name from your server
+    base_url: "http://127.0.0.1:8080"  # Base URL for local llama-server (change as needed)
     timeout: 30.0
     max_retries: 3
+    local_server: true  # Set to true for local servers, false for official OpenAI API
   
   # Legacy settings for backward compatibility
   ollama_host: http://localhost:11434
