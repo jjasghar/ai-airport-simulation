@@ -11,7 +11,7 @@ from typing import Dict, List, Optional
 
 from config import get_config
 from models.aircraft import Aircraft, AircraftState
-from models.airport import Airport
+from models.airport import Airport, RunwayState
 from models.position import Position
 from ai_interface import AIManager
 
